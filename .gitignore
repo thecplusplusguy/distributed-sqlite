@@ -1,0 +1,44 @@
+# ABOUTME: Git ignore file for distributed SQLite project
+# ABOUTME: Excludes build artifacts, logs, and sensitive development files
+
+# Binaries
+node
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool
+*.out
+
+# Go workspace file
+go.work
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Docker
+.docker/
+
+# Kubernetes secrets (if any)
+k8s/secrets/
+
+# Local development
+.env
+.env.local
+tmp/
+data/

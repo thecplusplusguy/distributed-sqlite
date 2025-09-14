@@ -1,0 +1,14 @@
+# ABOUTME: ConfigMap for distributed SQLite cluster configuration
+# ABOUTME: Centralized configuration for replication factor and cluster settings
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: distributed-sqlite-config
+  namespace: default
+data:
+  replication_factor: "2"
+  heartbeat_interval: "30s"
+  cluster_size: "3"
+  # Configuration for web monitoring interface
+  web_interface_enabled: "true"
+  web_interface_port: "8080"

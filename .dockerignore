@@ -1,0 +1,24 @@
+# ABOUTME: Dockerignore to optimize build context and security
+# ABOUTME: Excludes development files and sensitive data from Docker builds
+.git
+.gitignore
+README.md
+Dockerfile
+.dockerignore
+*.md
+.env
+.env.local
+.env.*.local
+node_modules
+coverage
+*.log
+.DS_Store
+.vscode
+.idea
+*.swp
+*.swo
+*~
+tmp/
+dist/
+build/
+.cache/

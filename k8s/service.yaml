@@ -1,0 +1,33 @@
+# ABOUTME: Kubernetes services for distributed SQLite cluster
+# ABOUTME: Provides both headless service for internal communication and LoadBalancer for external access
+---
+# Headless service for StatefulSet pod discovery
+apiVersion: v1
+kind: Service
+metadata:
+  name: distributed-sqlite-headless
+  namespace: default
+spec:
+  clusterIP: None
+  selector:
+    app: distributed-sqlite-node
+  ports:
+  - port: 8080
+    targetPort: 8080
+    name: http
+
+---
+# LoadBalancer service for external access
+apiVersion: v1
+kind: Service
+metadata:
+  name: distributed-sqlite-external
+  namespace: default
+spec:
+  type: LoadBalancer
+  selector:
+    app: distributed-sqlite-node
+  ports:
+  - port: 80
+    targetPort: 8080
+    name: http

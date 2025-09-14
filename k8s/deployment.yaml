@@ -1,0 +1,66 @@
+# ABOUTME: Kubernetes deployment for distributed SQLite nodes
+# ABOUTME: Creates a StatefulSet with multiple replicas for distributed database cluster
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: distributed-sqlite-nodes
+  namespace: default
+spec:
+  serviceName: "distributed-sqlite-headless"
+  replicas: 3
+  selector:
+    matchLabels:
+      app: distributed-sqlite-node
+  template:
+    metadata:
+      labels:
+        app: distributed-sqlite-node
+    spec:
+      containers:
+      - name: node
+        image: distributed-sqlite-node:latest
+        imagePullPolicy: Never  # Use local image for development
+        ports:
+        - containerPort: 8080
+          name: http
+        env:
+        - name: PORT
+          value: "8080"
+        - name: NODE_ID
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: REPLICATION_FACTOR
+          value: "2"
+        - name: PEER_ADDRESSES
+          value: "distributed-sqlite-nodes-0.distributed-sqlite-headless:8080,distributed-sqlite-nodes-1.distributed-sqlite-headless:8080,distributed-sqlite-nodes-2.distributed-sqlite-headless:8080"
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "50m"
+          limits:
+            memory: "128Mi"
+            cpu: "100m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 30
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        volumeMounts:
+        - name: data
+          mountPath: /app/data
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      resources:
+        requests:
+          storage: 1Gi
