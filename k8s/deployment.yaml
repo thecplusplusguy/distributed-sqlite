@@ -32,8 +32,8 @@ spec:
               fieldPath: metadata.name
         - name: REPLICATION_FACTOR
           value: "2"
-        - name: PEER_ADDRESSES
-          value: "distributed-sqlite-nodes-0.distributed-sqlite-headless:8080,distributed-sqlite-nodes-1.distributed-sqlite-headless:8080,distributed-sqlite-nodes-2.distributed-sqlite-headless:8080"
+        - name: CLUSTER_SIZE
+          value: "3"
         resources:
           requests:
             memory: "64Mi"
@@ -55,7 +55,7 @@ spec:
           periodSeconds: 10
         volumeMounts:
         - name: data
-          mountPath: /app/data
+          mountPath: /data
   volumeClaimTemplates:
   - metadata:
       name: data
