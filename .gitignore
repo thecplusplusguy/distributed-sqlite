@@ -2,7 +2,7 @@
 # ABOUTME: Excludes build artifacts, logs, and sensitive development files
 
 # Binaries
-node
+/node
 *.exe
 *.exe~
 *.dll
