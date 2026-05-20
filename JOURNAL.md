@@ -203,10 +203,11 @@ found a handful of real issues worth a proper queue rather than a brain dump:
 4. **Delete is local-only** — `DistributedStorage.Delete` never fans out.
 5. **SQLite concurrency** — known, op-queue planned.
 
-We tackled #1, #2, #3 today, all TDD. Commits:
+We tackled #1, #2, #3, #4 today, all TDD. Commits:
 - `9329af0` — HTTP server package + `cmd/node` entry point.
 - `4e4d695` — Pod namespace plumbed through cluster manager DNS.
-- (pending) — Read fan-out fix via new `GetAllPeers` method.
+- `c057041` — Read fan-out fix via new `GetAllPeers` method.
+- `d560a1b` — Delete now fans out to peers (mirrors Set).
 
 ### ✅ Highlights
 
@@ -234,11 +235,14 @@ fixing it together when we get there.
 
 ### 🎯 Next session goals
 
-- **Issue #4**: Make Delete actually distributed. Fanout via NodeClient.Delete,
-  fix the broken test, decide whether Delete returns success only when local
-  succeeds or also waits for some fanout acks.
-- **Issue #5**: Operation queue for SQLite concurrency. The journal entry from
-  the prior session already scoped this — concurrent writes hit DB locking.
+- **Issue #5 — Concurrency, with intent**: Dan wants to *explore* this one
+  rather than jump to the prior session's "operation queue" answer. So next
+  session starts with discussion: what concurrent workload are we actually
+  expecting, where exactly is the SQLite locking biting (write contention,
+  long-running reads, both?), and what trade-offs do alternatives buy us
+  (op queue vs. WAL mode + busy_timeout vs. per-key serialization vs. moving
+  off SQLite entirely). Don't open with code — open with the design
+  conversation.
 
 ### 🛠️ Backlog
 
@@ -249,7 +253,19 @@ fixing it together when we get there.
   the cluster, and re-copies under-replicated values would close the gap. This
   expands on the prior session's "Under-replication Detection API" /
   "Replication Repair API" items by making the repair *automatic*, not just
-  on-demand.
+  on-demand. **Delete has the same gap now** that it also fans out fire-and-
+  forget — the sweeper would need to handle tombstones too, or we need a
+  separate anti-entropy pass for deletes.
+- **Quiet the fanout `fmt.Printf` noise**. `replicateToNodes` and
+  `deleteOnNodes` print failed-peer warnings on every async error. In unit
+  tests using `mockCluster` (fake addresses), this floods test output even
+  on success runs. CLAUDE.md's "TEST OUTPUT MUST BE PRISTINE" rule is being
+  bent here. Swap to the `log` package with a level the tests can silence,
+  or inject a logger so tests can capture/discard.
+- **Update `test/integration_test.go`** to write through the public `/set`
+  endpoint instead of `/internal/set`. After issue #1, `/internal/set` is
+  local-only, so the integration test's "data replicated to ≥2 nodes" assertion
+  will not hold against a real cluster anymore.
 
 ### 💭 Notes for future-me
 
