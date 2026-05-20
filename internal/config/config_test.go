@@ -31,11 +31,13 @@ func TestConfig_ValidReplicationFactorFromEnv(t *testing.T) {
 	os.Setenv("PORT", "8080")
 	os.Setenv("REPLICATION_FACTOR", "3")
 	os.Setenv("CLUSTER_SIZE", "5")
+	os.Setenv("POD_NAMESPACE", "default")
 	defer func() {
 		os.Unsetenv("NODE_ID")
 		os.Unsetenv("PORT")
 		os.Unsetenv("REPLICATION_FACTOR")
 		os.Unsetenv("CLUSTER_SIZE")
+		os.Unsetenv("POD_NAMESPACE")
 	}()
 
 	config, err := LoadConfig()
@@ -147,11 +149,13 @@ func TestConfig_ValidConfigWithAllFields(t *testing.T) {
 	os.Setenv("PORT", "9090")
 	os.Setenv("REPLICATION_FACTOR", "2")
 	os.Setenv("CLUSTER_SIZE", "3")
+	os.Setenv("POD_NAMESPACE", "default")
 	defer func() {
 		os.Unsetenv("NODE_ID")
 		os.Unsetenv("PORT")
 		os.Unsetenv("REPLICATION_FACTOR")
 		os.Unsetenv("CLUSTER_SIZE")
+		os.Unsetenv("POD_NAMESPACE")
 	}()
 
 	config, err := LoadConfig()
@@ -173,6 +177,57 @@ func TestConfig_ValidConfigWithAllFields(t *testing.T) {
 
 	if config.ClusterSize != 3 {
 		t.Errorf("Expected ClusterSize 3, got %d", config.ClusterSize)
+	}
+
+	if config.Namespace != "default" {
+		t.Errorf("Expected Namespace 'default', got '%s'", config.Namespace)
+	}
+}
+
+func TestConfig_MissingPodNamespaceFails(t *testing.T) {
+	// All required env vars set except POD_NAMESPACE.
+	os.Setenv("NODE_ID", "test-node")
+	os.Setenv("PORT", "8080")
+	os.Setenv("REPLICATION_FACTOR", "2")
+	os.Setenv("CLUSTER_SIZE", "3")
+	os.Unsetenv("POD_NAMESPACE")
+	defer func() {
+		os.Unsetenv("NODE_ID")
+		os.Unsetenv("PORT")
+		os.Unsetenv("REPLICATION_FACTOR")
+		os.Unsetenv("CLUSTER_SIZE")
+	}()
+
+	_, err := LoadConfig()
+	if err == nil {
+		t.Error("Expected error for missing POD_NAMESPACE, got nil")
+	}
+
+	if err != nil && !containsString(err.Error(), "POD_NAMESPACE environment variable is required") {
+		t.Errorf("Expected 'POD_NAMESPACE environment variable is required' error, got: %v", err)
+	}
+}
+
+func TestConfig_PodNamespaceLoadedFromEnv(t *testing.T) {
+	os.Setenv("NODE_ID", "test-node")
+	os.Setenv("PORT", "8080")
+	os.Setenv("REPLICATION_FACTOR", "2")
+	os.Setenv("CLUSTER_SIZE", "3")
+	os.Setenv("POD_NAMESPACE", "test-2025-10-05-3n-3r")
+	defer func() {
+		os.Unsetenv("NODE_ID")
+		os.Unsetenv("PORT")
+		os.Unsetenv("REPLICATION_FACTOR")
+		os.Unsetenv("CLUSTER_SIZE")
+		os.Unsetenv("POD_NAMESPACE")
+	}()
+
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatalf("LoadConfig failed: %v", err)
+	}
+	if cfg.Namespace != "test-2025-10-05-3n-3r" {
+		t.Errorf("Expected Namespace 'test-2025-10-05-3n-3r', got '%s'", cfg.Namespace)
 	}
 }
 

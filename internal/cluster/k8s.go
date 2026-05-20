@@ -9,15 +9,17 @@ import (
 )
 
 type K8sClusterManager struct {
-	currentNodeID   string
-	serviceName     string
-	clusterSize     int
+	currentNodeID     string
+	namespace         string
+	serviceName       string
+	clusterSize       int
 	replicationFactor int
 }
 
-func NewK8sClusterManager(nodeID, serviceName string, clusterSize, replicationFactor int) *K8sClusterManager {
+func NewK8sClusterManager(nodeID, namespace, serviceName string, clusterSize, replicationFactor int) *K8sClusterManager {
 	return &K8sClusterManager{
 		currentNodeID:     nodeID,
+		namespace:         namespace,
 		serviceName:       serviceName,
 		clusterSize:       clusterSize,
 		replicationFactor: replicationFactor,
@@ -39,8 +41,8 @@ func (k *K8sClusterManager) GetReplicationNodes(key string) ([]*storage.Node, er
 			continue
 		}
 
-		// Create node with k8s service address
-		address := fmt.Sprintf("%s.distributed-sqlite-headless.default.svc.cluster.local:8080", nodeID)
+		// Create node with k8s service address (pod.service.namespace.svc.cluster.local)
+		address := fmt.Sprintf("%s.%s.%s.svc.cluster.local:8080", nodeID, k.serviceName, k.namespace)
 
 		nodes = append(nodes, &storage.Node{
 			ID:      nodeID,

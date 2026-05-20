@@ -61,6 +61,10 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: metadata.name
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
         - name: REPLICATION_FACTOR
           value: "$REPLICATION_FACTOR"
         - name: CLUSTER_SIZE

@@ -40,7 +40,7 @@ func main() {
 	}
 	defer local.Close()
 
-	clusterMgr := cluster.NewK8sClusterManager(cfg.NodeID, headlessServiceName, cfg.ClusterSize, cfg.ReplicationFactor)
+	clusterMgr := cluster.NewK8sClusterManager(cfg.NodeID, cfg.Namespace, headlessServiceName, cfg.ClusterSize, cfg.ReplicationFactor)
 	dist := distributed.NewDistributedStorage(clusterMgr, local, cfg.ReplicationFactor)
 	srv := server.New(cfg.NodeID, local, dist)
 

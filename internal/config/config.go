@@ -13,6 +13,7 @@ type Config struct {
 	Port              string
 	ReplicationFactor int
 	ClusterSize       int
+	Namespace         string
 }
 
 func LoadConfig() (*Config, error) {
@@ -64,6 +65,11 @@ func LoadConfig() (*Config, error) {
 	// Validate replication factor doesn't exceed cluster size
 	if config.ReplicationFactor > config.ClusterSize {
 		return nil, fmt.Errorf("replication factor (%d) cannot exceed cluster size (%d)", config.ReplicationFactor, config.ClusterSize)
+	}
+
+	config.Namespace = os.Getenv("POD_NAMESPACE")
+	if config.Namespace == "" {
+		return nil, fmt.Errorf("POD_NAMESPACE environment variable is required")
 	}
 
 	return config, nil
