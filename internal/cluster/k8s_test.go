@@ -34,6 +34,35 @@ func TestGetReplicationNodes_UsesProvidedNamespace(t *testing.T) {
 	}
 }
 
+func TestGetAllPeers_ReturnsAllNodesExceptSelf(t *testing.T) {
+	// In a 5-node cluster with RF=3, GetAllPeers should return 4 peers,
+	// not RF-1=2. Reads need to fan out across the whole cluster to find
+	// majority consensus, not just the write-replication subset.
+	mgr := NewK8sClusterManager(
+		"distributed-sqlite-nodes-2",
+		"default",
+		"distributed-sqlite-headless",
+		5,
+		3,
+	)
+
+	peers, err := mgr.GetAllPeers()
+	if err != nil {
+		t.Fatalf("GetAllPeers returned error: %v", err)
+	}
+	if len(peers) != 4 {
+		t.Fatalf("expected 4 peers in a 5-node cluster, got %d", len(peers))
+	}
+	for _, n := range peers {
+		if n.ID == "distributed-sqlite-nodes-2" {
+			t.Errorf("self should be excluded, got %q", n.ID)
+		}
+		if !strings.Contains(n.Address, ".default.svc.cluster.local") {
+			t.Errorf("expected namespaced address, got %q", n.Address)
+		}
+	}
+}
+
 func TestGetReplicationNodes_ExcludesSelfAndReturnsCorrectCount(t *testing.T) {
 	mgr := NewK8sClusterManager(
 		"distributed-sqlite-nodes-1",

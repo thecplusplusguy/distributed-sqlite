@@ -62,6 +62,25 @@ func (k *K8sClusterManager) GetReplicationNodes(key string) ([]*storage.Node, er
 	return nodes, nil
 }
 
+// GetAllPeers returns every node in the cluster except the current one.
+// Reads use this to fan out across the whole cluster for majority consensus,
+// whereas writes use GetReplicationNodes (capped at RF-1).
+func (k *K8sClusterManager) GetAllPeers() ([]*storage.Node, error) {
+	peers := make([]*storage.Node, 0, k.clusterSize-1)
+	for i := 0; i < k.clusterSize; i++ {
+		nodeID := fmt.Sprintf("distributed-sqlite-nodes-%d", i)
+		if nodeID == k.currentNodeID {
+			continue
+		}
+		address := fmt.Sprintf("%s.%s.%s.svc.cluster.local:8080", nodeID, k.serviceName, k.namespace)
+		peers = append(peers, &storage.Node{
+			ID:      nodeID,
+			Address: address,
+		})
+	}
+	return peers, nil
+}
+
 func (k *K8sClusterManager) GetHealthyNodeCount() int {
 	// For now, assume all nodes are healthy
 	// In production, this would check pod status via k8s API

@@ -12,6 +12,7 @@ import (
 
 type ClusterManager interface {
 	GetReplicationNodes(key string) ([]*storage.Node, error)
+	GetAllPeers() ([]*storage.Node, error)
 	GetHealthyNodeCount() int
 }
 
@@ -78,8 +79,9 @@ func (d *DistributedStorage) replicateToNodes(ctx context.Context, key string, v
 }
 
 func (d *DistributedStorage) Get(ctx context.Context, key string) ([]byte, error) {
-	// Get all available nodes for reading
-	nodes, err := d.cluster.GetReplicationNodes(key)
+	// Fan out to ALL peers, not just the RF-1 write-replication subset.
+	// Reads need majority consensus across the whole cluster.
+	nodes, err := d.cluster.GetAllPeers()
 	if err != nil {
 		// Fallback to local read if cluster query fails
 		return d.local.Get(ctx, key)

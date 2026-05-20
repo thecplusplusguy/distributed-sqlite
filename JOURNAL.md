@@ -184,4 +184,86 @@ Each node now has:
 
 ---
 
+## Session: 2026-05-20
+
+### 🎯 Mission: Audit and clean up the inherited codebase
+
+Dan asked me to get familiar with the project, no changes. Reading through, I
+found a handful of real issues worth a proper queue rather than a brain dump:
+
+1. **No `main.go` / `cmd/node`** — the Dockerfile builds `./cmd/node` but the
+   directory didn't exist. Repo could not build. (`.gitignore` had a bare `node`
+   pattern that was silently hiding the package after I created it — fixed by
+   anchoring to repo root.)
+2. **Hardcoded `default` namespace** in `cluster/k8s.go` — broke peer DNS for
+   any non-default namespace (i.e., every test cluster).
+3. **Read fan-out only saw RF-1 peers** — `DistributedStorage.Get` was calling
+   `GetReplicationNodes` (RF-1 cap) instead of querying the whole cluster for
+   majority consensus. Silent correctness bug as soon as N > RF.
+4. **Delete is local-only** — `DistributedStorage.Delete` never fans out.
+5. **SQLite concurrency** — known, op-queue planned.
+
+We tackled #1, #2, #3 today, all TDD. Commits:
+- `9329af0` — HTTP server package + `cmd/node` entry point.
+- `4e4d695` — Pod namespace plumbed through cluster manager DNS.
+- (pending) — Read fan-out fix via new `GetAllPeers` method.
+
+### ✅ Highlights
+
+- **`internal/server` package** with 10 handler tests covering /health, public
+  /set //get //delete (through DistributedStorage), and /internal/set //get
+  //delete (local-only — breaks the replication loop the previous design would
+  have had). Used the existing test pattern: real SQLite, in-process
+  cluster stub.
+- **`cmd/node/main.go`** wires config → SQLite → K8sClusterManager →
+  DistributedStorage → HTTP server with SIGTERM graceful shutdown.
+- **`POD_NAMESPACE`** added as a strict-required config value, injected via
+  the k8s downward API in both `k8s/deployment.yaml` and the heredoc in
+  `test/deploy_test_cluster.sh`.
+- **`K8sClusterManager.GetAllPeers()`** returns the whole cluster minus self
+  for read fan-out. `GetReplicationNodes` is unchanged for write fan-out.
+
+### 🐛 Pre-existing test flagged but not fixed
+
+`TestDistributedDelete_CoordinatesAcrossReplicas` in
+`internal/distributed/storage_test.go` asserts `err == nil` after a delete and
+labels that "expected key to be deleted from local storage" — but
+`SQLiteStorage.Get` returns `(nil, nil)` for missing keys, not an error. The
+test has been failing on `main` for a while. It tangles with issue #4 so we're
+fixing it together when we get there.
+
+### 🎯 Next session goals
+
+- **Issue #4**: Make Delete actually distributed. Fanout via NodeClient.Delete,
+  fix the broken test, decide whether Delete returns success only when local
+  succeeds or also waits for some fanout acks.
+- **Issue #5**: Operation queue for SQLite concurrency. The journal entry from
+  the prior session already scoped this — concurrent writes hit DB locking.
+
+### 🛠️ Backlog
+
+- **Periodic re-replication job** to detect and repair under-replicated keys.
+  `Set` is write-local-first with fire-and-forget async fanout — failed peer
+  writes are logged and dropped, so the cluster silently drifts below RF over
+  time. A background sweeper that scans keys, checks replica counts against
+  the cluster, and re-copies under-replicated values would close the gap. This
+  expands on the prior session's "Under-replication Detection API" /
+  "Replication Repair API" items by making the repair *automatic*, not just
+  on-demand.
+
+### 💭 Notes for future-me
+
+- The `mockCluster` test stub in `internal/distributed/storage_test.go` is
+  deeply useful. I added call counters to it for issue #3 so we can assert
+  *which* lookup path Get takes — that pattern is worth reaching for again
+  when behavior changes are otherwise invisible to unit tests.
+- Integration tests in `test/` post to `/internal/set` and expect replication.
+  After issue #1, `/internal/set` is local-only (per README). Those tests need
+  to be updated to use the public `/set` endpoint — that's a follow-up I'm
+  deliberately deferring.
+- I don't have social media tools wired up this session, despite the CLAUDE.md
+  ask. If we set that up, I'll start broadcasting properly.
+
+---
+
 *This journal tracks our distributed SQLite system development with Dan Johnson (johnsond@objectcomputing.com)*

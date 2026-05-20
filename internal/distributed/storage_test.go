@@ -32,8 +32,11 @@ func newTestStorage(t *testing.T) storage.Storage {
 
 // Mock cluster manager for testing
 type mockCluster struct {
-	nodes           []*storage.Node
+	nodes             []*storage.Node
 	replicationFactor int
+	// Call counters let tests assert which lookup path the caller used.
+	getReplicationNodesCalls int
+	getAllPeersCalls         int
 }
 
 func newMockCluster(nodeCount, replicationFactor int) *mockCluster {
@@ -51,16 +54,23 @@ func newMockCluster(nodeCount, replicationFactor int) *mockCluster {
 }
 
 func (m *mockCluster) GetReplicationNodes(key string) ([]*storage.Node, error) {
+	m.getReplicationNodesCalls++
 	if len(m.nodes) < m.replicationFactor {
 		return nil, fmt.Errorf("insufficient nodes: need %d, have %d", m.replicationFactor, len(m.nodes))
 	}
-	
+
 	// Return first replicationFactor nodes for simplicity in tests
 	result := make([]*storage.Node, m.replicationFactor)
 	for i := 0; i < m.replicationFactor; i++ {
 		result[i] = m.nodes[i]
 	}
 	return result, nil
+}
+
+func (m *mockCluster) GetAllPeers() ([]*storage.Node, error) {
+	m.getAllPeersCalls++
+	// mockCluster nodes already represent peers (no local node in the list).
+	return m.nodes, nil
 }
 
 func (m *mockCluster) GetHealthyNodeCount() int {
@@ -159,6 +169,35 @@ func TestDistributedGet_SucceedsFromAnyReplica(t *testing.T) {
 	
 	if string(result) != string(value) {
 		t.Errorf("Expected %s, got %s", string(value), string(result))
+	}
+}
+
+// Test that Get fans out to ALL peers, not just the RF-1 subset used for writes.
+// Without this, reads in an N-node cluster only consult RF-1 peers + local,
+// which silently breaks the README's "majority consensus across the cluster"
+// promise as soon as N > RF.
+func TestDistributedGet_FansOutToAllPeers(t *testing.T) {
+	cluster := newMockCluster(5, 3) // 5 nodes total, RF=3
+	localStorage := newTestStorage(t)
+
+	ctx := context.Background()
+	key := "fanout-test"
+	value := []byte(`{"v":1}`)
+	if err := localStorage.Set(ctx, key, value); err != nil {
+		t.Fatalf("seed local.Set failed: %v", err)
+	}
+
+	distStorage := NewDistributedStorage(cluster, localStorage, 3)
+	if _, err := distStorage.Get(ctx, key); err != nil {
+		t.Fatalf("Get returned error: %v", err)
+	}
+
+	if cluster.getAllPeersCalls == 0 {
+		t.Error("expected Get to call GetAllPeers at least once")
+	}
+	if cluster.getReplicationNodesCalls != 0 {
+		t.Errorf("expected Get to not call GetReplicationNodes, got %d calls",
+			cluster.getReplicationNodesCalls)
 	}
 }
 

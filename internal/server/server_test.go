@@ -23,6 +23,8 @@ func (testCluster) GetReplicationNodes(key string) ([]*storage.Node, error) {
 	return nil, nil
 }
 
+func (testCluster) GetAllPeers() ([]*storage.Node, error) { return nil, nil }
+
 func (testCluster) GetHealthyNodeCount() int { return 1 }
 
 func newTestServer(t *testing.T, nodeID string) (*Server, storage.Storage) {
