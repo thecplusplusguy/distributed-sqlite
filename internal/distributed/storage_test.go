@@ -220,10 +220,37 @@ func TestDistributedDelete_CoordinatesAcrossReplicas(t *testing.T) {
 		t.Errorf("Expected successful delete, got error: %v", err)
 	}
 	
-	// Verify data was deleted from local storage
-	_, err = localStorage.Get(ctx, key)
-	if err == nil {
-		t.Error("Expected key to be deleted from local storage")
+	// Verify data was deleted from local storage. SQLiteStorage.Get returns
+	// (nil, nil) for a missing key, not an error, so assert on the value.
+	stored, err := localStorage.Get(ctx, key)
+	if err != nil {
+		t.Errorf("local.Get returned unexpected error: %v", err)
+	}
+	if stored != nil {
+		t.Errorf("Expected key to be deleted from local storage, got %q", string(stored))
+	}
+}
+
+// Test that Delete fans out to peers, not just local. Without this, a key
+// deleted on one node lingers on the rest of the cluster and resurfaces on
+// subsequent reads via majority consensus.
+func TestDistributedDelete_FansOutToPeers(t *testing.T) {
+	cluster := newMockCluster(3, 3)
+	localStorage := newTestStorage(t)
+
+	ctx := context.Background()
+	key := "fanout-delete"
+	if err := localStorage.Set(ctx, key, []byte(`{"v":1}`)); err != nil {
+		t.Fatalf("seed local.Set failed: %v", err)
+	}
+
+	distStorage := NewDistributedStorage(cluster, localStorage, 3)
+	if err := distStorage.Delete(ctx, key); err != nil {
+		t.Fatalf("Delete returned error: %v", err)
+	}
+
+	if cluster.getReplicationNodesCalls == 0 {
+		t.Error("expected Delete to call GetReplicationNodes for peer fanout")
 	}
 }
 

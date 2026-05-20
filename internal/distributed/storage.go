@@ -166,8 +166,46 @@ type nodeResult struct {
 }
 
 func (d *DistributedStorage) Delete(ctx context.Context, key string) error {
-	// For now, just delete from local storage
-	return d.local.Delete(ctx, key)
+	// Mirror Set: delete locally first, then async fanout to RF-1 peers so the
+	// tombstone reaches the same set of nodes the write would have reached.
+	if err := d.local.Delete(ctx, key); err != nil {
+		return fmt.Errorf("local delete failed: %w", err)
+	}
+
+	nodes, err := d.cluster.GetReplicationNodes(key)
+	if err != nil {
+		fmt.Printf("Warning: failed to get replication nodes for delete: %v\n", err)
+		return nil
+	}
+
+	go d.deleteOnNodes(context.Background(), key, nodes)
+	return nil
+}
+
+func (d *DistributedStorage) deleteOnNodes(ctx context.Context, key string, nodes []*storage.Node) {
+	var wg sync.WaitGroup
+	deleted := 0
+	maxReplicas := d.replFactor - 1
+
+	for _, node := range nodes {
+		if deleted >= maxReplicas {
+			break
+		}
+
+		wg.Add(1)
+		go func(n *storage.Node) {
+			defer wg.Done()
+			if err := d.client.Delete(ctx, n, key); err != nil {
+				fmt.Printf("Failed to delete on node %s: %v\n", n.ID, err)
+			} else {
+				fmt.Printf("Successfully deleted key %s on node %s\n", key, n.ID)
+			}
+		}(node)
+
+		deleted++
+	}
+
+	wg.Wait()
 }
 
 func (d *DistributedStorage) List(ctx context.Context) ([]string, error) {
